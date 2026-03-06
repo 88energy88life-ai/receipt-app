@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>領収書作成ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body { font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; }
+
+        /* 画面表示用 */
+        .preview-box {
+            background: white;
+            padding: 40px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            min-height: 500px;
+        }
+
+        /* 印刷設定（ここを調整しました） */
+        @media print {
+            @page {
+                margin: 0;
+                size: A4;
+            }
+            
+            body { 
+                margin: 0;
+                padding: 0;
+                background: white;
+            }
+
+            .no-print { display: none !important; }
+
+            .print-area { 
+                /* 高さを固定せず、内容に合わせることで2枚目を防ぐ */
+                width: 100%;
+                height: auto; 
+                /* 余白を少し内側にとって安全圏にする */
+                padding: 15mm; 
+                box-sizing: border-box;
+                /* ページ途中で切れないようにする */
+                page-break-inside: avoid;
+            }
+
+            .preview-box {
+                box-shadow: none;
+                padding: 0;
+                border: none;
+            }
+
+            /* 全体を少し縮小して確実に収める（念のための保険） */
+            #app {
+                transform-origin: top center;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-8 text-gray-800">
+
+    <div id="app" class="max-w-6xl mx-auto flex flex-col md:flex-row gap-8">
+        
+        <div class="no-print w-full md:w-1/3 bg-white p-6 rounded-lg shadow-md h-fit">
+            <h2 class="text-xl font-bold mb-4 text-green-600">🛠 設定パネル</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold mb-1">宛名</label>
+                    <input v-model="recipient" type="text" class="w-full border p-2 rounded" placeholder="例：株式会社〇〇">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-bold mb-1">金額 (税込)</label>
+                    <input v-model.number="amount" type="number" class="w-full border p-2 rounded">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold mb-1">但し書き</label>
+                    <input v-model="proviso" type="text" class="w-full border p-2 rounded" placeholder="例：書籍代として">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm font-bold mb-1">発行日</label>
+                        <input v-model="date" type="date" class="w-full border p-2 rounded">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-1">領収書番号</label>
+                        <input v-model="number" type="text" class="w-full border p-2 rounded">
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div>
+                    <label class="block text-sm font-bold mb-1">発行者名</label>
+                    <input v-model="issuer" type="text" class="w-full border p-2 rounded">
+                </div>
+                
+                <button onclick="window.print()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded mt-4 transition">
+                    🖨 印刷 / PDF保存
+                </button>
+            </div>
+        </div>
+
+        <div class="w-full md:w-2/3 print-area">
+            <div class="preview-box relative">
+                
+                <h1 class="text-center text-4xl tracking-widest mb-16 font-serif pt-4">領収書</h1>
+
+                <div class="flex justify-between items-end mb-10">
+                    <div class="text-xl border-b border-gray-400 pb-1 pr-4 min-w-[250px]">
+                        {{ recipient }} <span class="text-sm ml-2">御中</span>
+                    </div>
+                    <div class="text-right text-sm leading-relaxed">
+                        <p>発行日：{{ formattedDate }}</p>
+                        <p>領収書番号：{{ number }}</p>
+                    </div>
+                </div>
+
+                <div class="border-2 border-gray-800 py-8 px-6 mb-6 flex justify-between items-center bg-white">
+                    <span class="text-xl font-bold">合計金額</span>
+                    <span class="text-4xl font-bold tracking-widest">
+                        ¥ {{ formatPrice(amount) }} -
+                    </span>
+                </div>
+
+                <div class="text-center mb-16">
+                    <p class="mb-2 text-lg">但 <span class="font-bold mx-2 border-b border-gray-300 px-2">{{ proviso }}</span> として</p>
+                    <p class="text-gray-600">上記正に領収いたしました。</p>
+                </div>
+
+                <div class="flex justify-between items-start mt-12 px-2">
+                    
+                    <div class="w-1/2 pr-8">
+                        <div class="border-b border-gray-300 py-2 flex justify-between">
+                            <span>税抜金額</span>
+                            <span>{{ formatPrice(subtotal) }} 円</span>
+                        </div>
+                        <div class="border-b border-gray-300 py-2 flex justify-between">
+                            <span>消費税額（10%）</span>
+                            <span>{{ formatPrice(tax) }} 円</span>
+                        </div>
+                    </div>
+
+                    <div class="w-1/3 text-right relative pt-2">
+                        <div class="font-bold text-lg mb-4">{{ issuer }}</div>
+                        <div class="absolute top-2 right-4 opacity-80 pointer-events-none transform -rotate-12">
+                            <div class="w-20 h-20 border-2 border-red-600 rounded-full flex items-center justify-center text-red-600 font-bold text-sm shadow-sm bg-white/50 backdrop-blur-sm">
+                                {{ issuer.slice(0,3) }}<br>之印
+                            </div>
+                        </div>
+                        <div class="h-24 border-b border-gray-300 mt-2"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            data() {
+                return {
+                    recipient: '深澤様',
+                    amount: 5000,
+                    proviso: '作業代',
+                    date: new Date().toISOString().split('T')[0],
+                    number: '1',
+                    issuer: 'お家のITお助け屋'
+                }
+            },
+            computed: {
+                formattedDate() { return this.date.replace(/-/g, '/'); },
+                subtotal() { return Math.floor(this.amount / 1.1); },
+                tax() { return this.amount - this.subtotal; }
+            },
+            methods: {
+                formatPrice(value) {
+                    if (!value && value !== 0) return '0';
+                    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
