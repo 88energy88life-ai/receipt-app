@@ -9,15 +9,23 @@
     <style>
         body { font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; }
 
-        /* 画面表示用 */
+        /* 画面表示用（ここを修正しました） */
         .preview-box {
             background: white;
-            padding: 40px;
+            padding: 20px; /* スマホ向けに少し余白を小さく */
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             min-height: 500px;
+            min-width: 680px; /* 領収書のレイアウトが崩れない最低限の幅をキープ */
         }
 
-        /* 印刷設定（ここを調整しました） */
+        /* PC画面（画面幅768px以上）では余白を元の40pxに戻す */
+        @media (min-width: 768px) {
+            .preview-box {
+                padding: 40px;
+            }
+        }
+
+        /* 印刷設定 */
         @media print {
             @page {
                 margin: 0;
@@ -47,6 +55,7 @@
                 box-shadow: none;
                 padding: 0;
                 border: none;
+                min-width: auto; /* 印刷時は固定幅を解除 */
             }
 
             /* 全体を少し縮小して確実に収める（念のための保険） */
@@ -103,7 +112,7 @@
             </div>
         </div>
 
-        <div class="w-full md:w-2/3 print-area">
+        <div class="w-full md:w-2/3 print-area overflow-x-auto">
             <div class="preview-box relative">
                 
                 <h1 class="text-center text-4xl tracking-widest mb-16 font-serif pt-4">領収書</h1>
